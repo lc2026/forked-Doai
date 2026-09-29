@@ -20,9 +20,10 @@ assistant-attribution default.
 `doc/code-style-contrib.md`: **AI agents MUST NOT add `Signed-off-by` or `Co-authored-by`
 trailers** — only a human can certify the Developer Certificate of Origin. Disclose AI assistance
 with `Assisted-by: AGENT_NAME:MODEL_VERSION` instead (e.g. `Assisted-by: Claude:claude-opus-5`).
-This is live practice, not aspirational: 123 commits in this history carry `Assisted-by:`. It is a
-documented policy rather than a CI gate, though — 222 commits still carry `Co-authored-by:`, so
-expect to see violations in the log.
+This is live practice, not aspirational — `Assisted-by:` appears on a substantial number of commits
+in this history. It is a documented policy rather than a CI gate, though: plenty of commits still
+carry `Co-authored-by:`, so expect violations in the log. Current counts, if you need them:
+`git log --all --grep='Assisted-by' --oneline | wc -l`.
 
 Every commit additionally needs the human author's own `Signed-off-by` (`git commit -s`) *and* a
 cryptographic SSH/GPG signature — the DCO check and the verified-commits check are separate CI
@@ -94,6 +95,40 @@ ctest -N                                       # list without running
 ctest -R '^physim\.nr\.' -L quick_physim       # narrow a physim family
 ```
 
+### `AGENTS.md`'s physim filters miss the CUDA simulation tests
+
+`AGENTS.md` prescribes `ctest -E '^physim\.|^benchmark_'` for the functional-unit-test stage and
+`ctest -R '^physim\.'` for the full physim stage. Both assume every `add_physim_test()` registration
+is named `physim.*`. Several are not, and they come from **two separate GPU-accelerator guards**,
+both defaulting OFF `[verified: add_physim_test() call sites and their enclosing guards]`:
+
+| Prefix | Guard | Registered in |
+|---|---|---|
+| `physim.*` | `ENABLE_PHYSIM_TESTS` | `openair1/SIMULATION/tests/CMakeLists.txt` |
+| `cuda.5g.channelsim.*` | `ENABLE_CHANNEL_SIM_CUDA` | same file, inner guard |
+| `ldpctest.*`, `nr_dlsim.*`, `nr_ulsim.*` | `ENABLE_LDPC_CUDA` | `openair1/PHY/CODING/nrLDPC_coding/nrLDPC_coding_cuda/CMakeLists.txt` |
+
+Default builds are unaffected — both accelerator flags are OFF. Enable either one together with
+`ENABLE_PHYSIM_TESTS` and both stages misbehave: the unit-test stage **runs** the GPU tests it was
+meant to exclude, and the "full physim" stage **silently skips** them. For a build with both
+accelerators on:
+
+```bash
+ctest -E '^(physim|cuda|ldpctest|nr_dlsim|nr_ulsim)\.|^benchmark_'   # functional unit tests
+ctest -R '^(physim|cuda|ldpctest|nr_dlsim|nr_ulsim)\.'               # the actual full simulation set
+```
+
+Don't hardcode that list — a new accelerator adds a new prefix. Regenerate it:
+
+Check the current prefixes rather than trusting this note:
+
+```bash
+grep -rhoE 'add_physim_test\([A-Za-z0-9_.]+' --include=CMakeLists.txt . \
+  | sed 's/add_physim_test(//' | cut -d. -f1 | sort -u
+```
+
+### Test layout
+
 Unit tests are *mostly* colocated in a `tests/` or `test/` subdirectory beside the code they cover
 (`openair2/LAYER2/nr_rlc/tests/`, `common/config/tests/`, `radio/rfsimulator/tests/`); adding a test
 means adding `add_test` to that directory's `CMakeLists.txt`. A handful are not — the repo-root
@@ -157,10 +192,12 @@ the MAC (the caller, on the DU). E1 mirrors it, split across two trees by which 
 **"Direct" means different things in the two directions** `[verified: itti_send_msg_to_task call
 counts in each *_direct.c]`:
 
-- **DL direct** (`mac_rrc_dl_direct.c`, 0 ITTI sends) — RRC calls straight into the DU-side handler.
-  Synchronous, same thread.
-- **UL direct** (`mac_rrc_ul_direct.c`, 15 ITTI sends) — still posts to `TASK_RRC_GNB`. "Direct"
-  here removes only the ASN.1 encoding and the socket, **not** the queue.
+- **DL direct** (`mac_rrc_dl_direct.c`) — contains no `itti_send_msg_to_task` at all; RRC calls
+  straight into the DU-side handler. Synchronous, same thread.
+- **UL direct** (`mac_rrc_ul_direct.c`) — every callback posts to `TASK_RRC_GNB`. "Direct" here
+  removes only the ASN.1 encoding and the socket, **not** the queue.
+
+Confirm with `grep -c itti_send_msg_to_task` on each file.
 
 Don't assume a monolithic build makes both directions synchronous; a UL path that looks like a
 function call is still a thread hop.
@@ -258,6 +295,9 @@ edit above them.
   a restarted CU-UP is never restored and CU-UPs are never released from CU-CP structures. Code
   disagrees (see the CU-UP gotcha above). Treat the rest of that doc as current — its E1 message
   flow and config sections check out.
-- `doc/MAC/mac-usage.md` decodes the periodic `nrMAC-stats.log` output field by field — the fastest
-  way to read a bad-radio run. `doc/RRC/rrc-usage.md` does the same for `nrRRC_stats.log`.
+- `doc/MAC/mac-usage.md` decodes the periodic MAC stats output field by field — the fastest way to
+  read a bad-radio run. `doc/RRC/rrc-usage.md` does the same for RRC. The files are
+  `nrMAC_stats.log` and `nrRRC_stats.log`, both **underscore** `[verified: string literals in
+  openair2]`; `mac-usage.md` writes it as `nrMAC-stats.log` in one place and `nrMAC_stats.log` in
+  another, and the hyphenated form is wrong.
 - `doc/README.md` is the index for everything else.
