@@ -81,9 +81,15 @@ ctest -N                                       # list without running
 ctest -R '^physim\.nr\.' -L quick_physim       # narrow a physim family
 ```
 
-Unit tests live in a `tests/` (or `test/`) subdirectory beside the code they cover, not in a central
-tree — `openair2/LAYER2/nr_rlc/tests/`, `common/config/tests/`, `radio/rfsimulator/tests/`. Adding a
-test means adding `add_test` to that directory's `CMakeLists.txt`.
+Unit tests are *mostly* colocated in a `tests/` or `test/` subdirectory beside the code they cover
+(`openair2/LAYER2/nr_rlc/tests/`, `common/config/tests/`, `radio/rfsimulator/tests/`); adding a test
+means adding `add_test` to that directory's `CMakeLists.txt`. A handful are not — the repo-root
+`tests/` tree holds component testers, and some modules register tests in their own directory. Don't
+conclude a test is missing from the colocation pattern alone; get the current list with:
+
+```bash
+grep -rl add_test --include=CMakeLists.txt .
+```
 
 ## One binary, several network functions
 
@@ -129,8 +135,22 @@ pointers, so the direct and F1AP/E1AP implementations sit in parallel files:
 | DU → CU | `NR_MAC_gNB/mac_rrc_ul.h` | `mac_rrc_ul_direct.c` | `mac_rrc_ul_f1ap.c` | ITTI handler in `rrc_gNB.c` |
 
 Note the asymmetry: DL callbacks live with the RRC (the caller, on the CU), UL callbacks live with
-the MAC (the caller, on the DU). E1 mirrors this with `cucp_cuup_direct.c` / `cuup_cucp_direct.c`
-versus `cucp_cuup_e1ap.c` / `cuup_cucp_e1ap.c`.
+the MAC (the caller, on the DU). E1 mirrors it, split across two trees by which side calls
+`[verified]`:
+
+- **CP → UP**: `openair2/RRC/NR/cucp_cuup_direct.c` and `cucp_cuup_e1ap.c`
+- **UP → CP**: `openair2/LAYER2/nr_pdcp/cuup_cucp_direct.c` and `cuup_cucp_e1ap.c`
+
+**"Direct" means different things in the two directions** `[verified: itti_send_msg_to_task call
+counts in each *_direct.c]`:
+
+- **DL direct** (`mac_rrc_dl_direct.c`, 0 ITTI sends) — RRC calls straight into the DU-side handler.
+  Synchronous, same thread.
+- **UL direct** (`mac_rrc_ul_direct.c`, 15 ITTI sends) — still posts to `TASK_RRC_GNB`. "Direct"
+  here removes only the ASN.1 encoding and the socket, **not** the queue.
+
+Don't assume a monolithic build makes both directions synchronous; a UL path that looks like a
+function call is still a thread hop.
 
 ## Concurrency: three mechanisms, different jobs
 
@@ -173,10 +193,14 @@ and `nr_ue_scheduled_response()` downward.
 
 ## Radio abstraction
 
-All RF goes through one device interface implemented per backend in `radio/`: `rfsimulator` (the
-software channel used by nearly all CI), `USRP`, `fhi_72` (O-RAN 7.2), plus `iqplayer`, `zmq`,
-`vrtsim` and vendor SDRs. A change in the common path affects all of them; test against the
-rfsimulator first because it needs no hardware.
+All RF goes through one device interface implemented per backend in `radio/`: `rfsimulator`, `USRP`,
+`fhi_72` (O-RAN 7.2), plus `iqplayer`, `zmq`, `vrtsim` and vendor SDRs. A change in the common path
+affects all of them.
+
+Test against the rfsimulator first because it needs no hardware — but rfsim is the largest single
+group in CI, not the majority of it: USRP and fhi72 configurations together outnumber it. An
+rfsim-only validation can still break hardware and fronthaul stages. Current split:
+`ls ci-scripts/conf_files/ | grep -ci rfsim` versus `usrp` / `fhi72`.
 
 ## Configuration
 
@@ -188,14 +212,26 @@ configs are in `ci-scripts/conf_files/`.
 
 ## Known gotchas
 
-- **ASan builds can die at compile time** with `DEADLYSIGNAL`, because OAI runs generated programs
-  *during* the build. Workaround: `sudo sysctl vm.mmap_rnd_bits=30` (weakens system ASLR).
-- **CU F1-U and N3 cannot share an interface.** Both GTP-U instances key tunnels on
-  (RRC UE ID, RB ID), so they must bind different sockets. Documented as a design flaw.
-- **A crashed CU-UP needs a CU-CP restart** — CU-UPs are never released from CU-CP structures.
-- **`--num-ues N` still opens every `RUs` entry**, not just the first N; extras consume resources.
-- **Submodules**: `git add -A` / `git commit -a` silently records an unintended submodule pointer
-  bump. Stage explicitly with `git add -p`; undo with `git restore --staged <path>`.
+`[verified]` = checked against source in-tree, with the citation. `[doc]` = read in `doc/` and not
+independently confirmable without running something.
+
+Citations name a **function or construct**, not a line number — line numbers rot silently on any
+edit above them.
+
+- `[verified: RU device-load loop in executables/nr-ue-ru.c]` **`--num-ues N` still opens every
+  `RUs` entry**, not just the first N. The loop calling `openair0_device_load()` runs over
+  `nrue_ru_count`, never the UE count, so surplus `RUs` entries consume resources unused.
+- `[verified: rrc_gNB_process_e1_lost_connection() in openair2/RRC/NR/rrc_gNB_cuup.c]` **A crashed
+  CU-UP does *not* require a CU-CP restart** — `doc/E1AP/E1-design.md` says CU-UPs are never
+  released, and that is stale. The function clears the E1 assoc ID from every affected UE, then
+  `RB_REMOVE`s the CU-UP from `rrc->cuups`, frees it, and decrements `rrc->num_cuups`. Expect
+  reconnection to work; if it doesn't, that's a bug, not the documented design.
+- `[doc: dev_tools/sanitizers.md]` **ASan builds can die at compile time** with `DEADLYSIGNAL`,
+  because OAI runs generated programs *during* the build. Workaround:
+  `sudo sysctl vm.mmap_rnd_bits=30` (weakens system ASLR). Not confirmable without building.
+- **Submodules** (general git behaviour): `git add -A` / `git commit -a` silently records an
+  unintended submodule pointer bump. Stage explicitly with `git add -p`; undo with
+  `git restore --staged <path>`.
 
 ## Which doc to trust
 
@@ -205,6 +241,10 @@ configs are in `ci-scripts/conf_files/`.
 - **`doc/SW_archi.md`** is broader but partly stale (describes `ocp_rxtx()`, carries `???` markers,
   and flags the `UL_INFO` handling as "not thread safe at all"). Useful for RLC/PDCP/GTP flow;
   prefer the graph doc for L1 threading.
+- **`doc/E1AP/E1-design.md`** has one confirmed-stale claim: its "abnormal conditions" section says
+  a restarted CU-UP is never restored and CU-UPs are never released from CU-CP structures. Code
+  disagrees (see the CU-UP gotcha above). Treat the rest of that doc as current — its E1 message
+  flow and config sections check out.
 - `doc/MAC/mac-usage.md` decodes the periodic `nrMAC-stats.log` output field by field — the fastest
   way to read a bad-radio run. `doc/RRC/rrc-usage.md` does the same for `nrRRC_stats.log`.
 - `doc/README.md` is the index for everything else.
