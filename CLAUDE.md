@@ -31,9 +31,22 @@ gates. See `doc/git-guide.md` for signing setup.
 ## Build
 
 `doc/BUILD.md` states that running `cmake` directly is the recommended path, so `AGENTS.md` and the
-docs agree; `build_oai` is the older wrapper. Caveat: the sanitizer flags
-(`--sanitize-address`, `--sanitize-thread`, …) and `--phy_simulators` are documented *only* as
-`build_oai` options, with no cmake equivalent written down — see `doc/dev_tools/sanitizers.md`.
+docs agree; `build_oai` is the older wrapper.
+
+**Sanitizers have first-class cmake options — you do not need `build_oai` for them**
+`[verified: add_boolean_option calls in CMakeLists.txt]`. `doc/dev_tools/sanitizers.md` documents
+only the wrapper flags, which makes them look wrapper-only. They are not:
+
+| `build_oai` flag | cmake option |
+|---|---|
+| `--sanitize-address` | `-DSANITIZE_ADDRESS=ON` |
+| `--sanitize-undefined` | `-DSANITIZE_UNDEFINED=ON` |
+| `--sanitize-thread` | `-DSANITIZE_THREAD=ON` |
+| `--sanitize-memory` | `-DSANITIZE_MEMORY=ON` (needs clang) |
+
+All default OFF. CMake enforces the MSan-vs-ASan/UBSan incompatibility itself, so a bad combination
+fails at configure time rather than at runtime. The `tests` preset already sets
+`SANITIZE_ADDRESS=ON`.
 
 **Presets do not build where `AGENTS.md` builds.** Both configure presets set their own `binaryDir`:
 
