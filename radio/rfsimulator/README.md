@@ -39,7 +39,7 @@ flowchart TD
 
 # Build
 
-## From [build_oai](../../../doc/BUILD.md) script
+## From [build_oai](../../doc/BUILD.md) script
 The RF simulator is implemented as an OAI device and always built when you build the OAI eNB or the OAI UE.
 
 Using the `-w SIMU` option it is possible to just re-build the RF simulator device.
@@ -155,7 +155,7 @@ Notes:
 1. This starts the gNB and UE in the `phy-test` UP-only mode where the gNB is started as if a UE had already connected. See [`RUNMODEM.md`](../../doc/RUNMODEM.md) for more details.
 2. `<TARGET_GNB_IP_ADDRESS>` should be the IP interface address of the remote host running the gNB executable, if the gNB and nrUE run on separate hosts, or be omitted if they are on the same host.
 3. To enable the noS1 mode, `--noS1` option should be added to the command line, see again [`RUNMODEM.md`](../../doc/RUNMODEM.md).
-4. Information on operating the gNB/UE with a 5GC can be found here. [here](../../../doc/NR_SA_Tutorial_OAI_CN5G.md).
+4. Information on operating the gNB/UE with a 5GC can be found here. [here](../../doc/NR_SA_Tutorial_OAI_CN5G.md).
 
 ## Store and replay
 

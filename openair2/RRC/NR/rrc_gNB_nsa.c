@@ -62,17 +62,14 @@ static int cg_config_info_from_ue_cap_file(uint32_t maxlen, uint8_t buf[maxlen])
     LOG_I(NR_RRC, "creating CG-ConfigInfo from UE capability file %s\n", uecap_file);
 
     FILE *f = fopen(uecap_file, "r");
-    if (!f) {
-      LOG_E(NR_RRC, "cannot open file %s, cannot read UE capabilities\n", uecap_file);
-      return 0;
-    }
+    AssertFatal(f, "could not open UE capabilities file \"%s\": %s\n", uecap_file, strerror(errno));
     char UE_NR_Capability_xer[65536];
     size_t size = fread(UE_NR_Capability_xer, 1, sizeof UE_NR_Capability_xer, f);
     fclose(f);
-    if (size == 0 || size == sizeof UE_NR_Capability_xer) {
-      LOG_E(NR_RRC, "UE Capabilities XER file %s could not be read (read %ld bytes)\n", uecap_file, size);
-      return 0;
-    }
+    AssertFatal(size > 0 && size < maxlen,
+                "UE Capabilities XER file %s could not be read (read %ld bytes)\n",
+                uecap_file,
+                size);
     NR_UE_NR_Capability_t *cap = calloc_or_fail(1, sizeof(*cap));
     asn_dec_rval_t dec_rval = xer_decode(0, &asn_DEF_NR_UE_NR_Capability, (void *)&cap, UE_NR_Capability_xer, size);
     DevAssert(dec_rval.code == RC_OK);

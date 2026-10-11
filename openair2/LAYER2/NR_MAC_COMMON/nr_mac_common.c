@@ -2198,6 +2198,20 @@ uint8_t get_l0_ul(uint8_t mapping_type, uint8_t dmrs_typeA_position)
   return ((mapping_type==typeA)?dmrs_typeA_position:0);
 }
 
+pusch_dmrs_AdditionalPosition_t get_pusch_dmrs_pos(const long *dmrs_AdditionalPosition)
+{
+  if (!dmrs_AdditionalPosition)
+    return pusch_dmrs_pos2;
+  if (*dmrs_AdditionalPosition == NR_DMRS_UplinkConfig__dmrs_AdditionalPosition_pos0)
+    return pusch_dmrs_pos0;
+  if (*dmrs_AdditionalPosition == NR_DMRS_UplinkConfig__dmrs_AdditionalPosition_pos1)
+    return pusch_dmrs_pos1;
+  if (*dmrs_AdditionalPosition == NR_DMRS_UplinkConfig__dmrs_AdditionalPosition_pos3)
+    return pusch_dmrs_pos3;
+  AssertFatal(false, "Invalid PUSCH DMRS additional position\n");
+  return pusch_dmrs_pos2;
+}
+
 int32_t get_l_prime(uint8_t duration_in_symbols,
                     uint8_t mapping_type,
                     pusch_dmrs_AdditionalPosition_t additional_pos,
@@ -3358,6 +3372,20 @@ int ul_ant_bits(NR_DMRS_UplinkConfig_t *NR_DMRS_UplinkConfig, long transformPrec
   }
 }
 
+static pdsch_dmrs_AdditionalPosition_t get_pdsch_dmrs_pos(const long *dmrs_AdditionalPosition)
+{
+  if (!dmrs_AdditionalPosition)
+    return pdsch_dmrs_pos2;
+  if (*dmrs_AdditionalPosition == NR_DMRS_DownlinkConfig__dmrs_AdditionalPosition_pos0)
+    return pdsch_dmrs_pos0;
+  if (*dmrs_AdditionalPosition == NR_DMRS_DownlinkConfig__dmrs_AdditionalPosition_pos1)
+    return pdsch_dmrs_pos1;
+  if (*dmrs_AdditionalPosition == NR_DMRS_DownlinkConfig__dmrs_AdditionalPosition_pos3)
+    return pdsch_dmrs_pos3;
+  AssertFatal(false, "Invalid PDSCH DMRS additional position\n");
+  return pdsch_dmrs_pos2;
+}
+
 int16_t fill_dmrs_mask(const NR_PDSCH_Config_t *pdsch_Config,
                        int dci_format,
                        int dmrs_TypeA_Position,
@@ -3366,7 +3394,6 @@ int16_t fill_dmrs_mask(const NR_PDSCH_Config_t *pdsch_Config,
                        mappingType_t mappingtype,
                        int length)
 {
-  int dmrs_AdditionalPosition = 0;
   NR_DMRS_DownlinkConfig_t *dmrs_config = NULL;
 
   LOG_D(NR_MAC,
@@ -3387,8 +3414,7 @@ int16_t fill_dmrs_mask(const NR_PDSCH_Config_t *pdsch_Config,
   }
   // in case of DCI FORMAT 1_0 or dedicated pdsch config not received additionposition = pos2, len1 should be used
   // referred to section 5.1.6.2 in 38.214
-  dmrs_AdditionalPosition = 2;
-
+  pdsch_dmrs_AdditionalPosition_t dmrs_AdditionalPosition = pdsch_dmrs_pos2;
   if (pdsch_Config != NULL) {
     if (mappingtype == typeA) { // Type A
       if (dci_format != NR_DL_DCI_FORMAT_1_0
@@ -3404,8 +3430,8 @@ int16_t fill_dmrs_mask(const NR_PDSCH_Config_t *pdsch_Config,
     }
 
     // default values of additionalposition is pos2
-    if (dmrs_config && dmrs_config->dmrs_AdditionalPosition != NULL)
-      dmrs_AdditionalPosition = *dmrs_config->dmrs_AdditionalPosition;
+    if (dmrs_config)
+      dmrs_AdditionalPosition = get_pdsch_dmrs_pos(dmrs_config->dmrs_AdditionalPosition);
   }
 
   // columns 0-3 for TypeA, 4-7 for TypeB
@@ -3421,7 +3447,8 @@ int16_t fill_dmrs_mask(const NR_PDSCH_Config_t *pdsch_Config,
 
   if (mappingtype == typeA) {
     // Section 7.4.1.1.2 in Spec 38.211
-    AssertFatal((l0 == 2) || (l0 == 3 && dmrs_AdditionalPosition != 3),"Wrong config, If dmrs_TypeA_Position POS3, ADD POS cannot be POS3 \n");
+    AssertFatal((l0 == 2) || (l0 == 3 && dmrs_AdditionalPosition != pdsch_dmrs_pos3),
+                "Wrong config, If dmrs_TypeA_Position POS3, ADD POS cannot be POS3\n");
     // Table 5.1.2.1-1 in Spec 38.214
     AssertFatal(startSymbol <= l0, "Wrong config, Start symbol %d cannot be later than dmrs_TypeA_Position %d \n", startSymbol, l0);
     // Section 7.4.1.1.2 in Spec 38.211

@@ -16,17 +16,11 @@
 #endif
 
 #include "defs_nr_common.h"
-#include "CODING/nrPolar_tools/nr_polar_pbch_defs.h"
 #include "PHY/defs_nr_sl_UE.h"
 #include "openair1/PHY/nr_phy_common/inc/nr_ue_phy_meas.h"
 #include "common/utils/threadPool/task_ans.h"
-#include <stdio.h>
-#include <stdlib.h>
 #include <malloc.h>
-#include <string.h>
-#include <math.h>
 #include "fapi_nr_ue_interface.h"
-#include "assertions.h"
 #include "common/utils/barrier/barrier.h"
 #include "common/utils/actor/actor.h"
 //#include "openair1/SCHED_NR_UE/defs.h"
@@ -449,16 +443,18 @@ typedef struct PHY_VARS_NR_UE_s {
   pthread_t stat_thread;
   // Per-DL-actor pre-allocated PDSCH scratch buffers (one set per actor to avoid races)
   struct pdsch_scratch_s {
-    c16_t   *rxdataF_comp;          // [NR_SYMBOLS_PER_SLOT][NR_MAX_NB_LAYERS][pdsch_buf_size_max]
-    c16_t   *dl_ch_mag;             // [NR_SYMBOLS_PER_SLOT][NR_MAX_NB_LAYERS][pdsch_buf_size_max]
-    c16_t   *dl_ch_magb;            // [NR_SYMBOLS_PER_SLOT][NR_MAX_NB_LAYERS][pdsch_buf_size_max]
-    c16_t   *dl_ch_magr;            // [NR_SYMBOLS_PER_SLOT][NR_MAX_NB_LAYERS][pdsch_buf_size_max]
-    c16_t   *rho_dl;                // [NR_SYMBOLS_PER_SLOT][NR_MAX_NB_LAYERS*NR_MAX_NB_LAYERS][pdsch_buf_size_max]
+    // 1-symbol-wide: channel compensation writes into these and LLR+demapping consumes
+    // them within the same nr_rx_pdsch() call, so no per-symbol slot-wide storage is kept.
+    c16_t   *rxdataF_comp;          // [max_layers][pdsch_buf_size_max]
+    c16_t   *dl_ch_mag;             // [max_layers][pdsch_buf_size_max]
+    c16_t   *dl_ch_magb;            // [max_layers][pdsch_buf_size_max]
+    c16_t   *dl_ch_magr;            // [max_layers][pdsch_buf_size_max]
+    c16_t   *rho_dl;                // [max_layers*max_layers][pdsch_buf_size_max], only allocated when do_ml is set
     int32_t *pdsch_dl_ch_estimates; // [nb_antennas_rx*NR_MAX_NB_LAYERS][pdsch_est_size]
     int16_t *llr[2];               // [2 codewords][llr_buf_max]
 #ifdef LDPC_CUDA
-    // gpu mapped version (cudaDeviceGetHostPointer), typically the same for Jetson/GH/GB
-    int16_t *llr_dev[10][2];
+    // gpu mapped version (gpuHostGetDevicePointer), typically the same for Jetson/GH/GB
+    int16_t *llr_dev[2];
 #endif
     uint32_t pdsch_buf_size_max;
     uint32_t pdsch_est_size;

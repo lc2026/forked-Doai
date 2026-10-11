@@ -32,7 +32,7 @@ sudo ./nr-uesoftmodem -r 106 --numerology 1 --band 78 -C 3619200000 --ssb 516
 
 With the **RFsimulator** (on the same machine), just add the option `--rfsim` to both gNB and NR UE command lines.
 
-UE capabilities can be passed according to the [UE Capabilities](#UE-Capabilities) section.
+UE capabilities can be passed according to the [UE Capabilities](#ue-capabilities) section.
 
 ## Configuration file
 
@@ -106,6 +106,7 @@ Here are some useful command line options for the NR UE:
 | `--usrp-args`            | Equivalent to the `sdr_addrs` field in the gNB config file. Used to identify the USRP and set some basic parameters (like the clock source).  |
 | `--clock-source`         | Sets the clock source (internal or external).                                                                 |
 | `--time-source`          | Sets the time source (internal or external).                                                                  |
+| `--ue-capability-rx2tx`  | Sets the minimum number of slots for the UE between RX command and TX of corresponding channel.               |
 
 You can view all available options by typing:
 
@@ -115,7 +116,13 @@ You can view all available options by typing:
 
 ### UE Capabilities
 
-The `--uecap_file` option can be used to pass the UE Capabilities input file (path location + filename), e.g.`--uecap_file ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/uecap_ports1.xml` for 1 layer or e.g. `--uecap_file ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/uecap_ports2.xml` for 2 layers.
+The `--uecap_file` option can be used to pass the UE Capabilities input file
+(path location + filename):
+
+- `targets/PROJECTS/GENERIC-NR-5GC/CONF/uecap_portsX.xml` for X=1,2,4 layer(s).
+  Those are sample files and might need to be tweaked for your scenario.
+
+Not providing this option yields empty UE capabilities being sent to the gNB.
 
 This option is available for the following combinations of operation modes and gNB/nrUE softmodems:
 
@@ -271,7 +278,7 @@ In summary:
   * `scp usera@machineA:/the/path/where/you/launched/nr-softmodem/r*config.raw userb@machineB:/the/path/where/you/will/launch/nr-uesoftmodem/`
   * Obviously this operation should be done before launching the `nr-uesoftmodem` executable.
 
-In phy-test mode it is possible to mimic the reception of UE Capabilities at gNB through the command line parameter `--uecap_file`. Refer to the [UE Capabilities](#UE-Capabilities) section for more details.
+In phy-test mode it is possible to mimic the reception of UE Capabilities at gNB through the command line parameter `--uecap_file`. Refer to the [UE Capabilities](#ue-capabilities) section for more details.
 
 ### noS1 setup with OAI UE
 
@@ -307,7 +314,7 @@ The do-ra flag is used to ran the NR Random Access procedures in contention-free
 
 In order to run the RA, the `--do-ra` flag is needed for both the gNB and the UE.
 
-In do-ra mode it is possible to mimic the reception of UE Capabilities at gNB through the command line parameter `--uecap_file`. Refer to the [UE Capabilities](#UE-Capabilities) section for more details.
+In do-ra mode it is possible to mimic the reception of UE Capabilities at gNB through the command line parameter `--uecap_file`. Refer to the [UE Capabilities](#ue-capabilities) section for more details.
 
 To run using the RFsimulator:
 

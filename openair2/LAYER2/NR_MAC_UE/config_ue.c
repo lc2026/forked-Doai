@@ -73,31 +73,17 @@ static void set_tdd_config_nr_ue(fapi_nr_tdd_table_t *tdd_table, const frame_str
   const tdd_period_config_t *pc = &fs->period_cfg;
   for (int i = 0; i < fs->numb_slots_period; i++) {
     fapi_nr_max_tdd_periodicity_t *period_list = &tdd_table->max_tdd_periodicity_list[i];
-    period_list->max_num_of_symbol_per_slot_list =
-      malloc(NR_SYMBOLS_PER_SLOT * sizeof(*period_list->max_num_of_symbol_per_slot_list));
     if (pc->tdd_slot_bitmap[i].slot_type == TDD_NR_DOWNLINK_SLOT) {
-      for (int s = 0; s < NR_SYMBOLS_PER_SLOT; s++) {
-        period_list->max_num_of_symbol_per_slot_list[s].slot_config = 0;
-      }
+      period_list->num_dl_ul_symbols_list.num_dl = NR_SYMBOLS_PER_SLOT;
     }
     if (pc->tdd_slot_bitmap[i].slot_type == TDD_NR_UPLINK_SLOT) {
-      for (int s = 0; s < NR_SYMBOLS_PER_SLOT; s++) {
-        period_list->max_num_of_symbol_per_slot_list[s].slot_config = 1;
-      }
+      period_list->num_dl_ul_symbols_list.num_ul = NR_SYMBOLS_PER_SLOT;
     }
     if (pc->tdd_slot_bitmap[i].slot_type == TDD_NR_MIXED_SLOT) {
       int dl_symb = pc->tdd_slot_bitmap[i].num_dl_symbols;
       int ul_symb = pc->tdd_slot_bitmap[i].num_ul_symbols;
-      int g_symb = NR_SYMBOLS_PER_SLOT - dl_symb - ul_symb;
-      for (int s = 0; s < dl_symb; s++) {
-        period_list->max_num_of_symbol_per_slot_list[s].slot_config = 0;
-      }
-      for (int s = dl_symb; s < dl_symb + g_symb; s++) {
-        period_list->max_num_of_symbol_per_slot_list[s].slot_config = 2;
-      }
-      for (int s = dl_symb + g_symb; s < NR_SYMBOLS_PER_SLOT; s++) {
-        period_list->max_num_of_symbol_per_slot_list[s].slot_config = 1;
-      }
+      period_list->num_dl_ul_symbols_list.num_dl = dl_symb;
+      period_list->num_dl_ul_symbols_list.num_ul = ul_symb;
     }
   }
 }
@@ -2941,8 +2927,9 @@ static void handle_mac_uecap_info(NR_UE_MAC_INST_t *mac, NR_UE_NR_Capability_t *
       int dl_bw_mhz = mac->phy_config.config_req.carrier_config.dl_bandwidth;
       if (!supported_bw_comparison(dl_bw_mhz, &fs_dl_cc->supportedBandwidthDL, fs_dl_cc->channelBW_90mhz))
         continue;
-      if (fs_dl_cc->maxNumberMIMO_LayersPDSCH)
-        mac->uecap_maxMIMO_PDSCH_layers = 2 << *fs_dl_cc->maxNumberMIMO_LayersPDSCH;
+      // No "oneLayer" value exists: single-layer PDSCH is baseline and never reported,
+      // so absence here means 1 layer, not "unknown" (PDSCH always needs >= 1).
+      mac->uecap_maxMIMO_PDSCH_layers = fs_dl_cc->maxNumberMIMO_LayersPDSCH ? 2 << *fs_dl_cc->maxNumberMIMO_LayersPDSCH : 1;
     }
   }
   if (ue_Capability->featureSets->featureSetsUplinkPerCC) {

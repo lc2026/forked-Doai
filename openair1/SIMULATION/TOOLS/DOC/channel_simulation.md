@@ -23,7 +23,7 @@ OAI channel simulation is using the [config module](../../../../common/config/DO
 
 The relevant source files are:
 
-1. [`radio/rfsimulator/simulator.c`](../../../../radio/rfsimulator/simulator.c)
+1. [`radio/rfsimulator/simulator.cpp`](../../../../radio/rfsimulator/simulator.cpp)
 2. [`radio/rfsimulator/apply_channelmod.c`](../../../../radio/rfsimulator/apply_channelmod.c)
 3. [`random_channel.c`](../random_channel.c)
 4. [`sim.h`](../sim.h)

@@ -687,8 +687,10 @@ int nr_config_pusch_pdu(NR_UE_MAC_INST_t *mac,
     /* HARQ_PROCESS_NUMBER */
     pusch_config_pdu->pusch_data.harq_process_id = pid;
 
-    if (NR_DMRS_ulconfig != NULL)
-      add_pos = (NR_DMRS_ulconfig->dmrs_AdditionalPosition == NULL) ? 2 : *NR_DMRS_ulconfig->dmrs_AdditionalPosition;
+    if (dci_format == NR_UL_DCI_FORMAT_0_0)
+      add_pos = pusch_config_pdu->frequency_hopping ? pusch_dmrs_pos1 : pusch_dmrs_pos2;
+    else if (NR_DMRS_ulconfig != NULL)
+      add_pos = get_pusch_dmrs_pos(NR_DMRS_ulconfig->dmrs_AdditionalPosition);
 
     /* DMRS */
     l_prime_mask = get_l_prime(pusch_config_pdu->nr_of_symbols,
@@ -1021,10 +1023,10 @@ void nr_ue_aperiodic_srs_scheduling(NR_UE_MAC_INST_t *mac, long resource_trigger
   }
 
   int scs = mac->current_UL_BWP->scs;
-  AssertFatal(slot_offset > GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, scs),
+  AssertFatal(slot_offset > GET_DURATION_RX_TO_TX(mac, scs),
               "Slot offset between DCI and aperiodic SRS (%d) needs to be higher than DURATION_RX_TO_TX (%ld)\n",
               slot_offset,
-              GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, scs));
+              GET_DURATION_RX_TO_TX(mac, scs));
   int n_slots_frame = mac->frame_structure.numb_slots_frame;
   int sched_slot = (slot + slot_offset) % n_slots_frame;
   if (!is_ul_slot(sched_slot, &mac->frame_structure)) {
@@ -1331,7 +1333,6 @@ void nr_ue_dl_scheduler(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info
 
   nr_scheduled_response_t scheduled_response = {.dl_config = dl_config,
                                                 .module_id = mac->ue_id,
-                                                .CC_id = dl_info->cc_id,
                                                 .phy_data = dl_info->phy_data,
                                                 .mac = mac};
   if (mac->if_module != NULL && mac->if_module->scheduled_response != NULL)
@@ -1617,8 +1618,7 @@ static void nr_ue_prach_scheduler(NR_UE_MAC_INST_t *mac, frame_t frameP, slot_t 
       release_ul_config(pdu, false);
       nr_scheduled_response_t scheduled_response = {.ul_config = mac->ul_config_request + slotP,
                                                     .mac = mac,
-                                                    .module_id = mac->ue_id,
-                                                    .CC_id = 0 /*TBR fix*/};
+                                                    .module_id = mac->ue_id};
       if(mac->if_module != NULL && mac->if_module->scheduled_response != NULL)
         mac->if_module->scheduled_response(&scheduled_response);
 
@@ -1644,7 +1644,7 @@ static void nr_ue_prach_scheduler(NR_UE_MAC_INST_t *mac, frame_t frameP, slot_t 
           next_slot = temp_slot;
           add_slots++;
         }
-        add_slots += GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mac->current_DL_BWP->scs);
+        add_slots += GET_DURATION_RX_TO_TX(mac, mac->current_DL_BWP->scs);
         nr_timer_setup(&ra->response_window_timer, ra->response_window_setup_time + add_slots, 1);
         nr_timer_start(&ra->response_window_timer);
       } else if (ra->ra_type == RA_2_STEP) {
@@ -1690,6 +1690,7 @@ static void nr_ue_prach_scheduler(NR_UE_MAC_INST_t *mac, frame_t frameP, slot_t 
   } // if is_nr_UL_slot
 }
 
+/** @brief Schedule UCI from an overlapping PUCCH onto PUSCH (TS 38.213 clause 9.2.5.3) */
 static bool schedule_uci_on_pusch(NR_UE_MAC_INST_t *mac,
                                   frame_t frame_tx,
                                   int slot_tx,
@@ -1710,8 +1711,8 @@ static bool schedule_uci_on_pusch(NR_UE_MAC_INST_t *mac,
       int nr_of_symbols = 0;
       int start_symbol_index = 0;
       if (pucch->initial_pucch_id > -1 && pucch->pucch_resource == NULL) {
-        const int idx = *current_UL_BWP->pucch_ConfigCommon->pucch_ResourceCommon;
-        const initial_pucch_resource_t pucch_resourcecommon = get_initial_pucch_resource(idx);
+        // Common HARQ: symbols from Table 9.2.1-1 row on the occasion (frozen at DCI)
+        const initial_pucch_resource_t pucch_resourcecommon = get_initial_pucch_resource(pucch->pucch_ResourceCommon);
         start_symbol_index = pucch_resourcecommon.startingSymbolIndex;
         nr_of_symbols = pucch_resourcecommon.nrofSymbols;
       }
@@ -1855,8 +1856,23 @@ static void nr_ue_pucch_scheduler(NR_UE_MAC_INST_t *mac, frame_t frame, int slot
   if (num_res == 1 && pucch[0].n_sr > 0 && pucch[0].sr_payload == 0)
     return;
 
-  if (num_res > 1)
+  // Common HARQ (TS 38.213 clause 9.2.1, Table 9.2.1-1): keep only ACK in this slot, drop dedicated resources
+  int common_harq = -1;
+  for (int i = 0; i < num_res; i++) {
+    if (pucch[i].pucch_resource == NULL && pucch[i].n_harq > 0) {
+      common_harq = i;
+      break;
+    }
+  }
+  if (common_harq >= 0) {
+    const PUCCH_sched_t harq = pucch[common_harq];
+    memset(pucch, 0, sizeof(pucch));
+    pucch[0] = harq;
+    num_res = 1;
+  } else if (num_res > 1) {
+    // multiplex dedicated PUCCH-Resource (TS 38.213 clause 9.2.5.1 / 9.2.5.2)
     multiplex_pucch_resource(mac, pucch, num_res);
+  }
 
   for (int j = 0; j < num_res; j++) {
     if (pucch[j].n_harq + pucch[j].n_sr + pucch[j].csi_payload.p1_bits != 0) {
@@ -2755,24 +2771,24 @@ int nr_ue_pusch_scheduler(const NR_UE_MAC_INST_t *mac,
 
     delta = get_delta_for_k2(mu);
 
-    AssertFatal((k2 + delta) > GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu),
+    AssertFatal((k2 + delta) > GET_DURATION_RX_TO_TX(mac, mu),
                 "Slot offset (%ld) for Msg3 needs to be higher than DURATION_RX_TO_TX (%ld). Please set min_rxtxtime at least to "
                 "%ld in gNB config file or gNBs.[0].min_rxtxtime=%ld via command line.\n",
                 k2,
-                GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu),
-                GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu),
-                GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu));
+                GET_DURATION_RX_TO_TX(mac, mu),
+                GET_DURATION_RX_TO_TX(mac, mu),
+                GET_DURATION_RX_TO_TX(mac, mu));
 
 
     get_pusch_frame_slot(current_frame, current_slot, k2, delta, slots_per_frame, frame_tx, slot_tx);
   } else {
-    AssertFatal(k2 >= GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu),
+    AssertFatal(k2 >= GET_DURATION_RX_TO_TX(mac, mu),
                 "Slot offset K2 (%ld) needs to be higher than DURATION_RX_TO_TX (%ld). Please set min_rxtxtime at least to %ld in "
                 "gNB config file or gNBs.[0].min_rxtxtime=%ld via command line.\n",
                 k2,
-                GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu),
-                GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu),
-                GET_DURATION_RX_TO_TX(&mac->phy_config.config_req.ntn_config, mu));
+                GET_DURATION_RX_TO_TX(mac, mu),
+                GET_DURATION_RX_TO_TX(mac, mu),
+                GET_DURATION_RX_TO_TX(mac, mu));
 
 
     if (k2 < 0) { // This can happen when a false DCI is received

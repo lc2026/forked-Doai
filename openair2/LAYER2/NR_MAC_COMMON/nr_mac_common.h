@@ -147,6 +147,13 @@ typedef enum {
 } pusch_dmrs_AdditionalPosition_t;
 
 typedef enum {
+  pdsch_dmrs_pos0 = 0,
+  pdsch_dmrs_pos1 = 1,
+  pdsch_dmrs_pos2 = 2,
+  pdsch_dmrs_pos3 = 3,
+} pdsch_dmrs_AdditionalPosition_t;
+
+typedef enum {
   pusch_len1 = 1,
   pusch_len2 = 2
 } pusch_maxLength_t;
@@ -162,7 +169,7 @@ typedef struct {
 } ssb_ro_preambles_t;
 
 uint32_t get_Y(const NR_SearchSpace_t *ss, int slot, rnti_t rnti);
-
+pusch_dmrs_AdditionalPosition_t get_pusch_dmrs_pos(const long *dmrs_AdditionalPosition);
 uint8_t get_BG(uint32_t A, uint16_t R);
 uint32_t get_short_bsr_value(int idx);
 uint32_t get_long_bsr_value(int idx);
@@ -178,6 +185,7 @@ uint16_t get_ul_bitmap(const frame_structure_t *fs, int slot);
 bool is_ul_slot(const slot_t slot, const frame_structure_t *fs);
 bool is_dl_slot(const slot_t slot, const frame_structure_t *fs);
 bool is_mixed_slot(const slot_t slot, const frame_structure_t *fs);
+bool is_ul_or_mixed_slot(const slot_t slot, const frame_structure_t *fs);
 int get_tdd_period_idx(NR_TDD_UL_DL_ConfigCommon_t *tdd);
 void config_frame_structure(int mu,
                             const NR_TDD_UL_DL_ConfigCommon_t *tdd_UL_DL_ConfigurationCommon,

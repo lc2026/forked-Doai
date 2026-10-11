@@ -732,8 +732,8 @@ int main(int argc, char *argv[])
     }
 
     init_nr_ue_transport(UE[u]);
-
-    UE_mac[u] = nr_l2_init_ue(u, mu);
+    int capability_rx2tx = 3;
+    UE_mac[u] = nr_l2_init_ue(u, mu, capability_rx2tx);
     ue_init_config_request(UE_mac[u], get_slots_per_frame_from_scs(mu));
     UE[u]->if_inst = nr_ue_if_module_init(u);
     UE[u]->if_inst->scheduled_response = nr_ue_scheduled_response;
@@ -1268,7 +1268,7 @@ int main(int argc, char *argv[])
 
             LOG_M("rxsigF0_llr.m",
                   "rxsF0_llr",
-                  &pusch_vars->llr[0],
+                  &pusch_vars->ulsch_llrs[0],
                   precod_nbr_layers * (nb_symb_sch - 1) * NR_NB_SC_PER_RB * pusch_pdu->rb_size * mod_order,
                   1,
                   0 | log_format);
@@ -1286,7 +1286,7 @@ int main(int argc, char *argv[])
 
             for (i = 0; i < available_bits; i++) {
               const uint8_t current_bit = (UE[u]->ul_harq_processes[harq_pid].f[i / 8] >> (i & 7)) & 1;
-              if (((current_bit == 0) && (pusch_vars->llr[i] <= 0)) || ((current_bit == 1) && (pusch_vars->llr[i] >= 0))) {
+              if (((current_bit == 0) && (pusch_vars->ulsch_llrs[i] <= 0)) || ((current_bit == 1) && (pusch_vars->ulsch_llrs[i] >= 0))) {
                 errors_scrambling[u][round]++;
               }
             }

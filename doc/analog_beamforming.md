@@ -18,7 +18,7 @@ Analog beamforming implementation also allows to enable distributed antenna syst
 
 ## Configuration file fields for analog beamforming
 
-A set of parameters in configuration files controls the implementation of analog beamforming and instructs the scheduler on how to behave in such scenarios. Since most notably this technique in 5G is employed in FR2, the configuration file example currently available is a RFsim one for band 261. [Config file example](../ci-scripts/conf_files/gnb.sa.band257.u3.66prb.rfsim.conf)
+A set of parameters in configuration files controls the implementation of analog beamforming and instructs the scheduler on how to behave in such scenarios. Since most notably this technique in 5G is employed in FR2, the configuration file example currently available is a RFsim one for band 257. [Config file example](../ci-scripts/conf_files/gnb.sa.band257.u3.66prb.rfsim.4beams.conf)
 
 In the `MACRLC` section of configuration files, there are three new parameters: `set_analog_beamforming`, `beam_duration` and `beams_per_period`. The explanation of these parameters is here provided:
 - `set_analog_beamforming` can be set to "none", "preconfigured" or "lophy" (default value is "none")

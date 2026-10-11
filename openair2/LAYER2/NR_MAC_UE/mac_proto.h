@@ -83,7 +83,7 @@ typedef struct nr_neighbor_cell_info {
 void nr_rrc_mac_config_req_meas(module_id_t module_id, const nr_neighbor_cell_info_t *neighbor_cells, int num_neighbors);
 
 /**\brief initialization NR UE MAC instance(s)*/
-NR_UE_MAC_INST_t * nr_l2_init_ue(int nb_inst, int numerology);
+NR_UE_MAC_INST_t * nr_l2_init_ue(int nb_inst, int numerology, int rx2tx_capability);
 
 /**\brief fetch MAC instance by module_id
    \param module_id index of MAC instance(s)*/
@@ -237,7 +237,7 @@ void nr_ra_succeeded(NR_UE_MAC_INST_t *mac, const frame_t frame, const int slot)
 void nr_ra_backoff_setting(RA_config_t *ra);
 void nr_get_RA_window(NR_UE_MAC_INST_t *mac);
 void prepare_msg4_msgb_feedback(NR_UE_MAC_INST_t *mac, int pid, int ack_nack);
-void configure_initial_pucch(PUCCH_sched_t *pucch, int res_ind, long *pucch_ResourceCommon);
+void configure_initial_pucch(PUCCH_sched_t *pucch, int res_ind, int pucch_ResourceCommon);
 void release_PUCCH_SRS(NR_UE_MAC_INST_t *mac);
 void nr_ue_reset_sync_state(NR_UE_MAC_INST_t *mac, bool reconf);
 void nr_ue_send_synch_request(NR_UE_MAC_INST_t *mac, module_id_t module_id, int cc_id, const fapi_nr_synch_request_t *sync_req);
